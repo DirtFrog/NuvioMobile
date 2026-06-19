@@ -12,6 +12,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         ref: '0.2.9' # Forces it to use the 0.2.9 release tag
+        fetch-depth: 0
 
     - name: Set up Java (Required for Kotlin Multiplatform)
       uses: actions/setup-java@v4
