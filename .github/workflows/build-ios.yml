@@ -1,42 +1,46 @@
-name: Build iOS IPA
+name: iOS Build
 
 on:
-  workflow_dispatch: # Allows you to run this manually with a button click
+  workflow_dispatch:
+  push:
+    branches:
+      - cmp-rewrite
+      - main
+      - master
+  pull_request:
 
 jobs:
   build:
     runs-on: macos-latest
 
     steps:
-    - name: Checkout Source Code
-      uses: actions/checkout@v4
-      with:
-        ref: '0.2.9' # Forces it to use the 0.2.9 release tag
-        fetch-depth: 0
+      - name: Checkout repo without broken recursive submodules
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
 
-    - name: Set up Java (Required for Kotlin Multiplatform)
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'zulu'
-        java-version: '17'
+      - name: Clone MPVKit only
+        run: |
+          rm -rf MPVKit
+          git clone --depth=1 https://github.com/tapframe/MPVNuvio.git MPVKit
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
-
-    - name: Make Build Script Executable
-      run: chmod +x ./scripts/build-distribution.sh
-
-    - name: Run Build Script
-      run: ./scripts/build-distribution.sh
-      env:
-        # If the script requires signing identity, you'd pass dummy variables here,
-        # but for an unsigned/simulator IPA, this usually suffices.
-        CI: true 
-
-    - name: Upload IPA Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: NuvioMobile-iOS-IPA
-        path: |
-          build/ios/iphoneos/**/*.ipa
-          iosApp/build/**/*.ipa
+      - name: Show project files
+        run: |
+          echo "Repo root:"
+          ls -la
+          echo "iosApp folder:"
+          ls -la iosApp || true
+      - name: Build iOS app
+        run: |
+          cd iosApp
+          xcodebuild \
+            -project iosApp.xcodeproj \
+            -scheme iosApp \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            CODE_SIGNING_ALLOWED=NO \
+            clean build
