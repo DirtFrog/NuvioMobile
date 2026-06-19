@@ -40,9 +40,7 @@ jobs:
       - name: Pre-compile Kotlin Shared Framework
         run: |
           chmod +x ./gradlew
-          # This forces Kotlin to compile the iOS framework ahead of time, injects it properly, 
-          # and catches any specific Kotlin syntax/dependency errors early.
-          ./gradlew :shared:compileReleaseKotlinIosArm64 || ./gradlew :shared:embedAndSignAppleFrameworkForXcode
+          ./gradlew :composeApp:compileReleaseKotlinIosArm64 || ./gradlew :composeApp:embedAndSignAppleFrameworkForXcode
 
       - name: Build iOS app for generic device
         run: |
@@ -62,7 +60,6 @@ jobs:
       - name: Package into IPA
         run: |
           mkdir -p Payload
-          # Note: The output might name the app "Nuvio.app" based on your build logs
           if [ -d "iosApp/build/Release-iphoneos/Nuvio.app" ]; then
             cp -r iosApp/build/Release-iphoneos/Nuvio.app Payload/
           else
