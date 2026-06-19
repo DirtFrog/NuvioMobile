@@ -24,23 +24,35 @@ jobs:
         run: |
           rm -rf MPVKit
           git clone --depth=1 https://github.com/tapframe/MPVNuvio.git MPVKit
+
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
-      - name: Show project files
-        run: |
-          echo "Repo root:"
-          ls -la
-          echo "iosApp folder:"
-          ls -la iosApp || true
-      - name: Build iOS app
+      - name: Build iOS app for generic device
         run: |
           cd iosApp
           xcodebuild \
             -project iosApp.xcodeproj \
             -scheme iosApp \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE_REQUIRED=NO \
             clean build
+
+      - name: Package into IPA
+        run: |
+          mkdir -p Payload
+          # Find the compiled .app file and move it into the Payload folder
+          cp -r iosApp/build/Release-iphoneos/iosApp.app Payload/
+          # Zip the Payload folder and rename it to .ipa
+          zip -r NuvioMobile.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NuvioMobile-Unsigned-IPA
+          path: NuvioMobile.ipa
