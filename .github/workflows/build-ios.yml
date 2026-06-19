@@ -25,8 +25,24 @@ jobs:
           rm -rf MPVKit
           git clone --depth=1 https://github.com/tapframe/MPVNuvio.git MPVKit
 
+      - name: Set up Java (Required for Kotlin Multiplatform)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Pre-compile Kotlin Shared Framework
+        run: |
+          chmod +x ./gradlew
+          # This forces Kotlin to compile the iOS framework ahead of time, injects it properly, 
+          # and catches any specific Kotlin syntax/dependency errors early.
+          ./gradlew :shared:compileReleaseKotlinIosArm64 || ./gradlew :shared:embedAndSignAppleFrameworkForXcode
 
       - name: Build iOS app for generic device
         run: |
@@ -46,9 +62,12 @@ jobs:
       - name: Package into IPA
         run: |
           mkdir -p Payload
-          # Find the compiled .app file and move it into the Payload folder
-          cp -r iosApp/build/Release-iphoneos/iosApp.app Payload/
-          # Zip the Payload folder and rename it to .ipa
+          # Note: The output might name the app "Nuvio.app" based on your build logs
+          if [ -d "iosApp/build/Release-iphoneos/Nuvio.app" ]; then
+            cp -r iosApp/build/Release-iphoneos/Nuvio.app Payload/
+          else
+            cp -r iosApp/build/Release-iphoneos/iosApp.app Payload/
+          fi
           zip -r NuvioMobile.ipa Payload
 
       - name: Upload IPA Artifact
