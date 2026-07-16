@@ -32,13 +32,16 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
     abstract val supabaseAnonKey: Property<String>
 
     @get:Input
-    abstract val nuvioSupabaseUrl: Property<String>
+    abstract val supabaseFallbackUrl: Property<String>
 
     @get:Input
-    abstract val nuvioSupabaseAnonKey: Property<String>
+    abstract val sentryDsn: Property<String>
 
     @get:Input
-    abstract val syncBackendManifestUrl: Property<String>
+    abstract val sentryEnvironment: Property<String>
+
+    @get:Input
+    abstract val realtimeSyncEnabled: Property<Boolean>
 
     @TaskAction
     fun generate() {
@@ -55,17 +58,34 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |object SupabaseConfig {
                 |    const val URL = "${supabaseUrl.get()}"
                 |    const val ANON_KEY = "${supabaseAnonKey.get()}"
-                |    const val NUVIO_URL = "${nuvioSupabaseUrl.get()}"
-                |    const val NUVIO_ANON_KEY = "${nuvioSupabaseAnonKey.get()}"
+                |    const val FALLBACK_URL = "${supabaseFallbackUrl.get()}"
                 |}
                 """.trimMargin()
             )
-            resolve("SyncBackendBootstrapConfig.kt").writeText(
+        }
+
+        outDir.resolve("com/nuvio/app/core/diagnostics").apply {
+            mkdirs()
+            resolve("SentryConfig.kt").writeText(
                 """
-                |package com.nuvio.app.core.network
+                |package com.nuvio.app.core.diagnostics
                 |
-                |object SyncBackendBootstrapConfig {
-                |    const val SWITCH_MANIFEST_URL = "${syncBackendManifestUrl.get()}"
+                |object SentryConfig {
+                |    const val DSN = "${sentryDsn.get()}"
+                |    const val ENVIRONMENT = "${sentryEnvironment.get()}"
+                |}
+                """.trimMargin()
+            )
+        }
+
+        outDir.resolve("com/nuvio/app/core/sync").apply {
+            mkdirs()
+            resolve("RealtimeSyncConfig.kt").writeText(
+                """
+                |package com.nuvio.app.core.sync
+                |
+                |object RealtimeSyncConfig {
+                |    const val ENABLED = ${realtimeSyncEnabled.get()}
                 |}
                 """.trimMargin()
             )
@@ -256,16 +276,30 @@ fun runtimeConfigValue(key: String, fallback: String = ""): String =
         ?: providers.environmentVariable(key).orNull?.trim()?.takeIf { it.isNotBlank() }
         ?: fallback
 
+fun runtimeConfigBoolean(key: String, default: Boolean): Boolean =
+    when (runtimeConfigValue(key).lowercase()) {
+        "1", "true", "yes", "y", "on" -> true
+        "0", "false", "no", "n", "off" -> false
+        else -> default
+    }
+
 val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generateRuntimeConfigs") {
     outputDir.set(generatedRuntimeConfigDir)
     localPropertiesFile.set(rootProject.layout.projectDirectory.file("local.properties"))
     appVersionName.set(releaseAppVersionName)
     appVersionCode.set(releaseAppVersionCode)
-    supabaseUrl.set(runtimeConfigValue("SUPABASE_URL"))
-    supabaseAnonKey.set(runtimeConfigValue("SUPABASE_ANON_KEY"))
-    nuvioSupabaseUrl.set(runtimeConfigValue("NUVIO_SUPABASE_URL"))
-    nuvioSupabaseAnonKey.set(runtimeConfigValue("NUVIO_SUPABASE_ANON_KEY"))
-    syncBackendManifestUrl.set(runtimeConfigValue("SYNC_BACKEND_MANIFEST_URL"))
+    supabaseUrl.set(runtimeConfigValue("NUVIO_SUPABASE_URL"))
+    supabaseAnonKey.set(runtimeConfigValue("NUVIO_SUPABASE_ANON_KEY"))
+    supabaseFallbackUrl.set(runtimeConfigValue("NUVIO_SUPABASE_FALLBACK_URL"))
+    sentryDsn.set(runtimeConfigValue("SENTRY_DSN"))
+    sentryEnvironment.set(
+        when {
+            requestedGradleTasks.any { "benchmark" in it } -> "benchmark"
+            requestedGradleTasks.any { "debug" in it } -> "debug"
+            else -> "production"
+        }
+    )
+    realtimeSyncEnabled.set(runtimeConfigBoolean("NUVIO_REALTIME_SYNC_ENABLED", true))
 }
 
 tasks.withType<KotlinCompilationTask<*>>().configureEach {
@@ -282,6 +316,7 @@ kotlin {
         }
         minSdk = libs.versions.android.minSdk.get().toInt()
         androidResources.enable = true
+        withHostTest {}
 
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_11)
@@ -343,7 +378,8 @@ kotlin {
                 implementation("com.squareup.okhttp3:okhttp:4.12.0")
                 implementation("com.google.code.gson:gson:2.11.0")
                 implementation("io.github.peerless2012:ass-media:0.4.0-beta01")
-                implementation(libs.ktor.client.android)
+                implementation(libs.ktor.client.okhttp)
+                implementation(libs.sentry.android)
                 implementation(libs.androidx.media3.exoplayer.hls)
                 implementation(libs.androidx.media3.exoplayer.dash)
                 implementation(libs.androidx.media3.exoplayer.smoothstreaming)
@@ -355,6 +391,7 @@ kotlin {
                 implementation(libs.androidx.media3.common)
                 implementation(libs.androidx.media3.container)
                 implementation(libs.androidx.media3.extractor)
+                implementation(libs.mpv.android.lib)
                 implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("lib-*.aar"))))
                 if (androidDistribution == "full") {
                     implementation(files("libs/quickjs-kt-android-1.0.5-nuvio.aar"))
@@ -380,14 +417,18 @@ kotlin {
             implementation(libs.compose.ui)
             implementation(libs.compose.components.resources)
             implementation(libs.compose.uiToolingPreview)
+            implementation(libs.compottie)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(libs.kotlinx.serialization.json)
-            implementation(libs.androidx.navigation.compose)
+            implementation(libs.kotlinx.atomicfu)
+            implementation(libs.kmpalette.core)
+            implementation(libs.androidx.navigation3.ui)
             implementation(libs.kermit)
             implementation(libs.supabase.postgrest)
             implementation(libs.supabase.auth)
             implementation(libs.supabase.functions)
+            implementation(libs.supabase.realtime)
             implementation(libs.reorderable)
         }
         commonTest.dependencies {

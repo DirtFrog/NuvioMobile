@@ -11,6 +11,7 @@ fun PlayerScreen(
     sourceAudioUrl: String? = null,
     sourceHeaders: Map<String, String> = emptyMap(),
     sourceResponseHeaders: Map<String, String> = emptyMap(),
+    externalSubtitles: List<com.nuvio.app.features.streams.StreamSubtitle> = emptyList(),
     streamType: String? = null,
     providerName: String,
     streamTitle: String,
@@ -19,6 +20,7 @@ fun PlayerScreen(
     pauseDescription: String? = null,
     onBack: () -> Unit,
     onOpenInExternalPlayer: ((ExternalPlayerPlaybackRequest) -> Unit)? = null,
+    onOpenExternalUrl: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
     logo: String? = null,
     poster: String? = null,
@@ -38,6 +40,7 @@ fun PlayerScreen(
     torrentTrackers: List<String> = emptyList(),
     initialPositionMs: Long = 0L,
     initialProgressFraction: Float? = null,
+    contentLanguage: String? = null,
 ) {
     PlayerScreenContent(
         PlayerScreenArgs(
@@ -47,6 +50,7 @@ fun PlayerScreen(
             sourceAudioUrl = sourceAudioUrl,
             sourceHeaders = sourceHeaders,
             sourceResponseHeaders = sourceResponseHeaders,
+            externalSubtitles = externalSubtitles,
             streamType = streamType,
             providerName = providerName,
             streamTitle = streamTitle,
@@ -55,6 +59,7 @@ fun PlayerScreen(
             pauseDescription = pauseDescription,
             onBack = onBack,
             onOpenInExternalPlayer = onOpenInExternalPlayer,
+            onOpenExternalUrl = onOpenExternalUrl,
             modifier = modifier,
             logo = logo,
             poster = poster,
@@ -74,6 +79,7 @@ fun PlayerScreen(
             torrentTrackers = torrentTrackers,
             initialPositionMs = initialPositionMs,
             initialProgressFraction = initialProgressFraction,
+            contentLanguage = contentLanguage,
         )
     )
 }
